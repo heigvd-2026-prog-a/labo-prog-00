@@ -10,7 +10,9 @@ Le correcteur automatique ne lit que des fichiers texte. Ce script produit :
 
 Il ne renvoie jamais un code d'erreur : le CI l'exécute avant les tests et un
 rapport absent ou illisible doit être constaté par les tests, pas bloquer le
-pipeline.
+pipeline. Comme les tests de contenu, il lit rendu/ et rapport.docx sans
+tenir compte de la casse (`Rendu/Rapport.docx`) : la faute de nommage est
+pénalisée par les tests de nommage, elle ne cache pas le rapport.
 """
 
 from __future__ import annotations
@@ -21,7 +23,6 @@ import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RENDU = ROOT / "rendu"
 BUILD = ROOT / "build"
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -36,6 +37,23 @@ def git(*args: str) -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
     return result.stdout if result.returncode == 0 else None
+
+
+def find_ignoring_case(parent: Path, name: str) -> Path | None:
+    """`parent/name`, sinon la première entrée de `parent` de même nom à la casse près."""
+    exact = parent / name
+    if exact.exists():
+        return exact
+    if not parent.is_dir():
+        return None
+    matches = sorted(p for p in parent.iterdir() if p.name.casefold() == name.casefold())
+    return matches[0] if matches else None
+
+
+def rendu_dir() -> Path | None:
+    """Le dossier rendu/, quelle que soit sa casse ; None s'il n'existe pas."""
+    found = find_ignoring_case(ROOT, "rendu")
+    return found if found is not None and found.is_dir() else None
 
 
 def section(title: str, body: str) -> str:
@@ -54,19 +72,21 @@ def tracked_files() -> str:
 
 
 def rendu_listing() -> str:
-    if not RENDU.is_dir():
+    folder = rendu_dir()
+    if folder is None:
         return "(le dossier rendu/ n'existe pas)"
-    rows = []
-    for path in sorted(RENDU.rglob("*")):
+    rows = [] if folder.name == "rendu" else [f"(le dossier s'appelle {folder.name}/)"]
+    for path in sorted(folder.rglob("*")):
         kind = "dossier" if path.is_dir() else f"{path.stat().st_size} octets"
-        rows.append(f"{path.relative_to(RENDU)}  ({kind})")
+        rows.append(f"{path.relative_to(folder)}  ({kind})")
     return "\n".join(rows) or "(vide)"
 
 
 def report() -> tuple[str, str]:
     """Retourne (rapport.md, résumé pour l'inventaire)."""
-    path = RENDU / "rapport.docx"
-    if not path.is_file():
+    folder = rendu_dir()
+    path = find_ignoring_case(folder, "rapport.docx") if folder is not None else None
+    if path is None or not path.is_file():
         return "(rendu/rapport.docx est absent)\n", "rendu/rapport.docx absent"
     try:
         doc = rendu_docx.load(path)

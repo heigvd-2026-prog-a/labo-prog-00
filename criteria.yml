@@ -1,11 +1,15 @@
 # Critères d'évaluation du laboratoire 00 : prise en main de l'ordinateur
 #
-# Deux paliers (voir .github/workflows/grading.yml) :
-#   - à chaque push, le CI n'attribue que `rendu.all-tests-passed`, au prorata
-#     des tests de tests/test_rendu.py qui passent : note indicative, 4.0 au
-#     plus quand tout est conforme ;
-#   - à la deadline, la revue LLM note tous les critères, le rapport Word étant
-#     lu dans son extraction texte build/rapport.md produite par `make prepare`.
+# Deux usages :
+#   - à chaque push, le CI (.github/workflows/grading.yml) n'attribue que
+#     `rendu.all-tests-passed`, au prorata des tests de tests/test_rendu.py qui
+#     passent : note indicative, 4.0 au plus quand tout est conforme ;
+#   - la note définitive vient de l'évaluation par critères de la plateforme
+#     Quiz : elle exécute `make prepare` et les tests de l'énoncé sur le dépôt
+#     de l'étudiant, propose les points des critères qui ont un `prompt` par
+#     une revue LLM (le rapport Word lu dans build/rapport.md), laisse à
+#     l'enseignant ceux qui n'en ont pas (git.commits), et l'enseignant valide
+#     chaque critère.
 ---
 schema_version: 2
 
@@ -25,13 +29,25 @@ grading:
     « ## » pour Titre 1) et chaque image par une ligne « [image : ...] » avec
     sa taille. Tu ne peux donc pas juger le contenu des captures d'écran,
     seulement leur présence et leur emplacement. L'inventaire du dépôt
-    (build/inventaire.txt) donne les fichiers publiés, les métadonnées du
-    document et l'historique Git. La sortie de pytest (test-output.txt)
-    détaille les vérifications automatiques déjà effectuées.
+    (build/inventaire.txt) donne les fichiers publiés et les métadonnées du
+    document. Le résultat des tests (nombre de tests réussis, tests échoués
+    avec leur message, sortie de pytest) détaille les vérifications
+    automatiques déjà effectuées.
 
     Évalue uniquement à partir de ces preuves. En cas de doute légitime,
     accorde le bénéfice du doute. Justifie chaque point attribué ou retiré en
-    une ou deux phrases, en français, adressées à l'étudiant.
+    une ou deux phrases, en français, adressées à l'étudiant (vouvoiement),
+    de façon factuelle : ce qui est constaté, ce qui était attendu.
+
+    Le rendu est évalué tel quel : les tests de l'énoncé tournent sur le
+    dépôt de l'étudiant, sans rien renommer ni corriger. Une faute de nommage
+    (casse du dossier ou d'un fichier, double extension, point en trop) est
+    pénalisée par les tests qui vérifient les noms, une fois par test ; les
+    tests de contenu et l'extraction du rapport lisent le dossier et les
+    fichiers sans tenir compte de la casse, si bien qu'une faute de casse ne
+    cache pas le reste du travail. Les fichiers superflus et les exécutables
+    publiés sont pénalisés par leurs propres tests. Ne pénalise aucune de ces
+    fautes une seconde fois dans les autres critères.
   student:
     level: 1ère année Bachelor, HEIG-VD, premier laboratoire du semestre
     knows:
@@ -55,9 +71,10 @@ criteria:
       awarded_points: 0
       max_points: 12
       prompt: >
-        Lis la sortie de pytest dans test-output.txt. Attribue les points au
-        prorata des tests réussis sur les tests exécutés (12 × réussis /
-        exécutés, arrondi au demi-point). Ne réévalue pas toi-même ces
+        Attribue les points au prorata des tests réussis sur les tests
+        exécutés (12 × réussis / exécutés, arrondi au demi-point), d'après le
+        résultat des tests tel quel. Dans la justification, donne le décompte
+        et nomme chaque test échoué. Ne réévalue pas toi-même ces
         vérifications, elles sont déterministes.
   rapport:
     description: Rapport Word (rendu/rapport.docx, lu dans build/rapport.md)
@@ -83,7 +100,10 @@ criteria:
         et la viande de boeuf, c'est un jeu de mots ; une capture de la
         calculatrice.
         6. Une capture d'écran de Visual Studio Code montrant hello.c.
-        7. La commande cowsay -f dragon "Bilbon, je t'aurais" et sa sortie.
+        7. La commande cowthink -f dragon "Bilbon, je t'aurais" et sa sortie :
+        la sortie attendue a une bulle de pensée (parenthèses et petits o),
+        c'est donc cowthink et non cowsay ; toute commande qui produit la
+        même sortie est aussi acceptée.
         8. La clé SSH publique (ligne ssh-ed25519 AAAA...).
         9. Git blame : la ligne « came in a flying DeLorean » d'addrman.cpp est
         attribuée à Pieter Wuille (2014 dans le blame affiché, 2012 pour la
@@ -101,8 +121,9 @@ criteria:
       prompt: >
         Accorde 2 si la structure est complète et ordonnée : un style Titre
         avec « Rapport de laboratoire », un Sous-titre « Laboratoire 00 :
-        Prise en main de l'ordinateur », le nom, le prénom et la date, puis un
-        Titre 1 par étape (au moins Microsoft Word, premier programme,
+        Prise en main de l'ordinateur », une ligne portant un nom et un
+        prénom (les noms sont masqués : ne vérifie que leur présence, jamais
+        leur identité) et la date, puis un Titre 1 par étape (au moins Microsoft Word, premier programme,
         calculatrice, Visual Studio Code, Linux, Git ou clé SSH, GitHub), avec
         les réponses et les images sous la section correspondante. Accorde 1
         si la structure existe mais est incomplète ou désordonnée. Accorde 0
@@ -133,14 +154,6 @@ criteria:
       description: L'historique Git est propre, avec une identité configurée et des messages de commit clairs
       awarded_points: 0
       max_points: 1
-      prompt: >
-        D'après l'historique Git de build/inventaire.txt, accorde 1 si les
-        commits de l'étudiant portent son vrai nom, une adresse e-mail
-        plausible (pas l'exemple Emmett Brown) et des messages descriptifs
-        (« Rendu du laboratoire 00 » ou équivalent). Accorde 0.5 si les
-        messages sont vides de sens (« update », « a », « fix »). Accorde 0 si
-        l'identité est celle de l'exemple ou absente. Ignore les commits des
-        bots (hgc-*, github-actions) et le commit initial de l'énoncé.
   bonus:
     description: Bonus
     proactivite:

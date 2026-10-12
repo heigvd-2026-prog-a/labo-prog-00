@@ -14,6 +14,14 @@ explique ce qui manque et comment corriger.
 Le dossier rendu/ doit contenir hello.c, two-pies.txt et rapport.docx ; un
 README.md y est toléré, tout autre fichier est refusé.
 
+Les noms comptent, casse comprise : les tests de NOMMAGE
+(test_dossier_rendu_existe, test_fichier_obligatoire_publie) échouent sur
+`Rendu/` ou `Rapport.docx`, et c'est ainsi, une fois par test, que la faute
+est pénalisée. Les tests de CONTENU, eux, lisent le dossier et les fichiers
+sans tenir compte de la casse (rendu_file) : une faute de casse ne cache pas
+le reste du travail. Seule la casse est tolérée ; une double extension
+(`two-pies..txt`, `hello.c.txt`) ne l'est pas.
+
 Les réponses aux questions de l'énoncé ne sont pas écrites en clair ici mais
 comparées par empreinte SHA-256, pour ne pas les révéler.
 """
@@ -72,14 +80,24 @@ def tracked(path: str = ".") -> list[str] | None:
     return [p for p in output.split("\0") if p]
 
 
-def rendu_files() -> tuple[set[str], bool]:
-    """Fichiers de rendu/ (relatifs) et indicateur « lus depuis Git »."""
-    files = tracked("rendu")
+def rendu_files(ignore_case: bool = False) -> tuple[set[str], bool]:
+    """Fichiers de rendu/ (relatifs) et indicateur « lus depuis Git ».
+
+    `ignore_case` : le dossier quelle que soit sa casse (`Rendu/`), pour les
+    vérifications de contenu ; sans lui, le nom exact `rendu`.
+    """
+
+    def in_rendu(folder: str) -> bool:
+        return folder.casefold() == "rendu" if ignore_case else folder == "rendu"
+
+    files = tracked()
     if files is not None:
-        return {p[len("rendu/"):] for p in files if p.startswith("rendu/")}, True
-    if not RENDU.is_dir():
+        inside = (p.partition("/") for p in files)
+        return {rest for folder, sep, rest in inside if sep and in_rendu(folder)}, True
+    folder = find_ignoring_case(ROOT, "rendu") if ignore_case else RENDU
+    if folder is None or not folder.is_dir():
         return set(), False
-    return {str(p.relative_to(RENDU)) for p in RENDU.rglob("*") if p.is_file()}, False
+    return {str(p.relative_to(folder)) for p in folder.rglob("*") if p.is_file()}, False
 
 
 def normalize(text: str) -> str:
@@ -93,6 +111,27 @@ def digest(token: str) -> str:
 
 def any_token_matches(pattern: str, text: str, expected: set[str]) -> bool:
     return any(digest(m) in expected for m in re.findall(pattern, text))
+
+
+def find_ignoring_case(parent: Path, name: str) -> Path | None:
+    """`parent/name`, sinon la première entrée de `parent` de même nom à la casse près."""
+    exact = parent / name
+    if exact.exists():
+        return exact
+    if not parent.is_dir():
+        return None
+    matches = sorted(p for p in parent.iterdir() if p.name.casefold() == name.casefold())
+    return matches[0] if matches else None
+
+
+def rendu_file(name: str) -> Path | None:
+    """Le fichier `name` de rendu/ pour les tests de contenu, casse du dossier
+    et du fichier ignorée ; None s'il manque."""
+    folder = find_ignoring_case(ROOT, "rendu")
+    if folder is None or not folder.is_dir():
+        return None
+    found = find_ignoring_case(folder, name)
+    return found if found is not None and found.is_file() else None
 
 
 def decode_text(raw: bytes) -> str:
@@ -124,7 +163,13 @@ def test_fichier_obligatoire_publie(name: str):
     if name in files:
         return
     by_lower = {f.casefold(): f for f in files}
-    if (RENDU / name).exists() and via_git:
+    folder = find_ignoring_case(ROOT, "rendu")
+    if not RENDU.is_dir() and folder is not None and folder.is_dir():
+        hint = (
+            f"le dossier s'appelle `{folder.name}` : la casse des noms compte, "
+            "renommez-le exactement `rendu` (`git mv`)"
+        )
+    elif (RENDU / name).exists() and via_git:
         hint = (
             "le fichier existe sur le disque mais n'est pas publié dans Git : "
             "`git add rendu`, puis `git commit` et `git push`"
@@ -145,8 +190,12 @@ def test_fichier_obligatoire_publie(name: str):
 
 
 def test_aucun_fichier_superflu():
-    files, _ = rendu_files()
-    extra = sorted(files - ALLOWED)
+    # Le contenu du dossier, quelle que soit la casse du dossier ; un fichier
+    # demandé mal nommé (`Rapport.docx`) est pénalisé par son test de nommage,
+    # pas une seconde fois ici.
+    files, _ = rendu_files(ignore_case=True)
+    allowed = {name.casefold() for name in ALLOWED}
+    extra = sorted(f for f in files if f.casefold() not in allowed)
     if not extra:
         return
     hints = []
@@ -200,8 +249,8 @@ def test_aucun_executable_publie():
 
 @pytest.fixture(scope="module")
 def hello_source() -> bytes:
-    path = RENDU / "hello.c"
-    if not path.is_file():
+    path = rendu_file("hello.c")
+    if path is None:
         pytest.fail("`rendu/hello.c` est absent, impossible de le vérifier.")
     return path.read_bytes()
 
@@ -241,8 +290,8 @@ def test_hello_c_auteur_remplace(hello_source: bytes):
 
 @pytest.fixture(scope="module")
 def hello_binary(tmp_path_factory: pytest.TempPathFactory) -> SimpleNamespace:
-    source = RENDU / "hello.c"
-    if not source.is_file():
+    source = rendu_file("hello.c")
+    if source is None:
         pytest.fail("`rendu/hello.c` est absent, impossible de le compiler.")
     gcc = shutil.which("gcc") or shutil.which("cc")
     if gcc is None:
@@ -297,8 +346,8 @@ def test_hello_affiche_hello_world(hello_binary: SimpleNamespace):
 
 
 def test_two_pies_contient_le_resultat():
-    path = RENDU / "two-pies.txt"
-    assert path.is_file(), "`rendu/two-pies.txt` est absent."
+    path = rendu_file("two-pies.txt")
+    assert path is not None, "`rendu/two-pies.txt` est absent."
     content = decode_text(path.read_bytes()).strip()
     assert re.fullmatch(r"6[.,]28", content), (
         "`rendu/two-pies.txt` doit contenir uniquement le résultat de 3.14 × 2 "
@@ -313,8 +362,8 @@ def test_two_pies_contient_le_resultat():
 
 @pytest.fixture(scope="module")
 def rapport() -> rendu_docx.Document:
-    path = RENDU / "rapport.docx"
-    if not path.is_file():
+    path = rendu_file("rapport.docx")
+    if path is None:
         pytest.fail("`rendu/rapport.docx` est absent, impossible de le vérifier.")
     try:
         return rendu_docx.load(path)
