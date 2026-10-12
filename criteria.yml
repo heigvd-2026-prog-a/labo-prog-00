@@ -70,12 +70,6 @@ criteria:
       description: Les tests automatiques passent (arborescence, fichiers publiés, compilation et exécution de hello.c, contenu de two-pies.txt, éléments vérifiables du rapport)
       awarded_points: 0
       max_points: 12
-      prompt: >
-        Attribue les points au prorata des tests réussis sur les tests
-        exécutés (12 × réussis / exécutés, arrondi au demi-point), d'après le
-        résultat des tests tel quel. Dans la justification, donne le décompte
-        et nomme chaque test échoué. Ne réévalue pas toi-même ces
-        vérifications, elles sont déterministes.
   rapport:
     description: Rapport Word (rendu/rapport.docx, lu dans build/rapport.md)
     reponses:

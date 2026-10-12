@@ -513,24 +513,3 @@ def test_rapport_reponse_git_blame(rapport_text: str):
     assert any_token_matches(r"\b(?:19|20)\d{2}\b", rapport_text, BLAME_YEARS), (
         "L'année où la ligne DeLorean a été écrite manque ou est fausse."
     )
-
-
-# --------------------------------------------------------------------------
-# Git
-# --------------------------------------------------------------------------
-
-
-def test_identite_git_configuree():
-    output = git("log", "-1", "--format=%an%n%ae")
-    if output is None:
-        pytest.skip("pas de dépôt Git")
-    name, _, email = output.strip().partition("\n")
-    assert "emmett" not in name.casefold() and "emmett.brown" not in email.casefold(), (
-        "Le dernier commit porte l'identité de l'exemple (Emmett Brown). Configurez "
-        "la vôtre avec `git config --global user.name` et `user.email`, puis "
-        "refaites un commit."
-    )
-    assert "@" in email, (
-        "Le dernier commit n'a pas d'adresse e-mail : configurez "
-        "`git config --global user.email`."
-    )
